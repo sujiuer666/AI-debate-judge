@@ -11,3 +11,8 @@ samples/*.json
 
 # 本地环境变量（虽然程序不读 .env，但避免误提交）
 .env
+
+# 网站部署（Streamlit Community Cloud / 本地 secrets）：密钥绝不入库
+# 云端部署时 Secrets 在平台后台填写；本地开发可放 .streamlit/secrets.toml
+.streamlit/
+secrets.toml

@@ -9,7 +9,9 @@
 # 明确不引入：langchain / nicegui / fastapi / uvicorn / groq / openai SDK / openpyxl
 # （被参考仓库的运行时依赖与 Streamlit MVP 冲突，第 1 步已声明只提取思路）
 
-streamlit>=1.35
+# streamlit 固定到实测版本 1.66.0：Streamlit 官方建议 pin 版本，否则 Community Cloud
+# 等托管平台会在重建时自动升级，可能出现与本地不一致的行为（本项目全部测试在该版本下通过）。
+streamlit==1.66.0
 pydantic>=2.6
 tenacity>=8.2
 requests>=2.31

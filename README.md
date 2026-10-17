@@ -133,6 +133,7 @@ python scripts\probe_schema.py --file 你的导出.json
 - [ ] QQ 导出文件字段不匹配时，`st.error` 显示「第 N 条消息」与原始 JSON 片段（截断）
 - [ ] LLM 返回非 JSON 或引用非原文时，界面显示「LLM 输出校验失败」，且程序内部先尝试过 1 次重写
 - [ ] 全程没有生成日志文件、没有把聊天原文写入磁盘（结果只在 session 内存中）
+- [ ] `.streamlit/` 与 `secrets.toml` 已被 `.gitignore` 覆盖（`git check-ignore -v .streamlit/secrets.toml` 应命中）
 - [ ] `python -m pytest tests -q` 全绿：37 项离线用例通过；另 2 项界面冒烟需要已安装 streamlit（未安装时显示 skipped）
 
 ## 9. 本次交付的验证状态（可复现）
@@ -150,7 +151,55 @@ python scripts\probe_schema.py --file 你的导出.json
 
 **仍未验证**：真实 LLM 调用（全部测试用假 client）、chatlog 响应与 QCE 导出的真实字段名（需按第 7 节本地 probe 后回填候选表）。
 
-## 10. 已知限制
+## 10. 网站部署（Streamlit Community Cloud，可选）
+
+本项目是标准 Streamlit 单页应用：入口 `app.py`、依赖 `requirements.txt` 均在**仓库根**，满足 Community Cloud 要求（官方规则：入口文件可在任意位置，但应用从仓库根初始化；依赖文件放仓库根或入口同级，见 [App dependencies](https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/app-dependencies)）。
+
+### 10.1 部署步骤
+
+1. 打开 <https://share.streamlit.io> → **Create app**；
+2. Repository 选 `sujiuer666/AI-debate-judge`，Branch `main`，**Main file path 填 `app.py`**；
+3. **Advanced settings** → Python version 选 **3.12**（本项目需要 ≥3.10）；
+4. Secrets 里粘贴（TOML）：
+
+```toml
+DEBATE_JUDGE_API_KEY = "sk-..."
+DEBATE_JUDGE_MODEL = "gpt-4o-mini"
+# 可选：自定义 OpenAI 兼容地址
+# DEBATE_JUDGE_BASE_URL = "https://api.openai.com/v1"
+```
+
+5. **Deploy**（首次构建约 2–5 分钟）；
+6. 打开应用 → 点「载入示例」确认界面 → 点「开始评判」确认 Key 生效。
+
+> **关键点**：Secrets 里的键必须是**根级**（顶格、不在 `[section]` 内）。Streamlit 官方文档明确：根级键会「同时作为环境变量可用」；本项目 `llm_client.py` 只读 `os.environ`，因此这样才能生效。若写成 `[llm]` 再放 key，则**不会**变成环境变量，应用会报「环境未就绪」。
+
+### 10.2 云端与本地运行的差异（重要）
+
+| 项 | 本地运行 | 网站部署（Community Cloud） |
+|---|---|---|
+| API Key | 环境变量 | 平台 Secrets 根级键（自动注入环境变量） |
+| chatlog 适配器 | 可用（连本机 `127.0.0.1:5030`） | **不可用**：云端没有你的 chatlog 服务，勾选后只会得到连接失败提示（默认关闭，不影响其它功能） |
+| QQ 导出上传 | 文件只在本机内存中解析 | 文件会**先上传到托管服务器（美国机房）**再在内存解析；仍不落盘、不写日志，但「数据没离开你的机器」不再成立 |
+| 进程生命周期 | 你关闭才停止 | 无流量 **12 小时休眠**，任何人访问可唤醒；重启后 session 内容丢失 |
+| 资源 | 你的机器 | CPU 0.078–2 核、内存 690MB–2.7GB，超限会显示 "Oh no" |
+| 错误详情 | 可看 traceback | 平台强制隐藏 traceback，只能看 `st.error` 文案与 Cloud logs |
+
+### 10.3 成本与滥用（部署前必读）
+
+Community Cloud 应用默认**公开可访问、无登录**，而 API Key 是你一个人的：任何拿到 URL 的人点「开始评判」都会消耗你的额度。至少做一项防护：
+
+- 只把 URL 发给自己人（最弱）；
+- 在 `app.py` 里加访问口令（读 Secrets 中的 `APP_ACCESS_CODE`，未设置则不启用）；
+- 或改成「用户自带 Key」模式（会与本项目「Key 仅来自环境变量」的约束冲突，需明确同意后再改）。
+
+> 当前仓库只提供**最小可部署形态**，未包含口令/限流/Dockerfile；需要这些可另行添加。
+
+### 10.4 版本固定
+
+`requirements.txt` 已将 `streamlit` 固定为 **1.66.0**（本项目实测版本），其余依赖仍为下限。这样可以避免托管平台自动升级 Streamlit 导致行为漂移（Streamlit 官方同样建议 pin 版本）。
+
+## 11. 已知限制
 
 - **适配器字段未最终确认**：chatlog / QCE 的真实 schema 需在第 7 节本地跑一次后回填候选表；在此之前适配器能保证「报错清晰」，不保证「一次解析成功」。
 - **QCE 流式 JSONL 未支持**：适配器只接受单个 JSON 文件/对象；如导出选了 `STREAMING_JSONL`，请改用普通 JSON。
@@ -159,13 +208,15 @@ python scripts\probe_schema.py --file 你的导出.json
 - **群聊/多人会话**：超过 2 个发言人会直接报错，需先过滤成双方对话。
 - **平局阈值**为四维加权均值差 ≤ 0.5（0–10 尺度），可在 `config.py` 调整。
 
-## 11. 隐私与安全
+## 12. 隐私与安全
 
 - API Key 只从环境变量读取，代码中无字面量，错误信息不回显 Key。
 - 不写日志文件、不落盘聊天原文；上传文件在内存中解析；结果只存在 Streamlit session。
+- **网站部署时**：QQ 导出文件会先上传到托管服务器（见第 10.2 节），且应用默认公开——需要「数据完全不离开本机」请本地运行。
+- `.streamlit/` 与 `secrets.toml` 已加入 `.gitignore`，密钥不会被提交。
 - `scripts/probe_schema.py` 只打印到 stdout，但输出可能含聊天原文，分享前请自行脱敏。
 
-## 12. 参考与许可证
+## 13. 参考与许可证
 
 | 来源 | 用途 | 许可证 |
 |---|---|---|
