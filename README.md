@@ -28,6 +28,11 @@ debate_judge/
 ├── scripts/probe_schema.py     # 未知 JSON 字段探测（本地确认用）
 ├── samples/sample_debate.txt   # 3 轮示例（可直接点“载入示例”）
 ├── tests/                      # 离线测试（不联网、不需要 Key）
+├── cloudflare/                 # 网站形式 B：Cloudflare Worker 单文件版（无 Python）
+│   ├── worker.js               # 内嵌 HTML/CSS/JS + API + 裁判逻辑（粘贴即部署）
+│   ├── selftest.mjs            # Node 自测：32 项断言，假 LLM，不联网
+│   ├── wrangler.toml           # 可选：仅 wrangler CLI 部署时需要
+│   └── README.md               # 该版本的部署/自测说明
 ├── requirements.txt
 ├── .env.example                # 仅键名参考；程序不读取 .env
 └── README.md
@@ -199,7 +204,63 @@ Community Cloud 应用默认**公开可访问、无登录**，而 API Key 是你
 
 `requirements.txt` 已将 `streamlit` 固定为 **1.66.0**（本项目实测版本），其余依赖仍为下限。这样可以避免托管平台自动升级 Streamlit 导致行为漂移（Streamlit 官方同样建议 pin 版本）。
 
-## 11. 已知限制
+## 11. 网站形式 B：Cloudflare Worker（无 Python，需重写）
+
+**先说清楚一条硬限制**：Cloudflare 的 Workers / Pages **没有 Python 运行时、也没有长驻进程**，Streamlit 应用**不能**直接部署上去（第 10 节的 Streamlit Community Cloud 才是 Python 版的托管方案）。Cloudflare Containers 理论上能跑 Docker，但需要额外配置/计费，且本仓库未走这条路。
+
+本仓库因此提供了一个**独立重写**的 Cloudflare 版本：`cloudflare/worker.js` —— 一个文件里同时包含前端页面、`/api/judge` 接口和完整裁判逻辑（四维评分、逐字引用校验、A/B 对调平均、分数裁剪、胜方由数值重算、输出不合契约时重写 1 次、429/5xx 指数退避）。
+
+### 11.1 功能对照
+
+| 能力 | Python 版（Streamlit） | Cloudflare 版（Worker） |
+|---|---|---|
+| 四维评分 + 每维逐字引用 + 0 分规则 | ✅ | ✅ |
+| A/B 顺序对调取平均 | ✅ | ✅（固定开启；每轮 2 次调用） |
+| 胜方由数值重算 / 平局阈值 0.5 | ✅ | ✅ |
+| 每轮双列展示 / 累计 / 支持度 / 本轮优势方 | ✅ | ✅（原生 HTML/CSS，响应式） |
+| 解析错误 / LLM 错误 / 校验错误 三类提示 | ✅ | ✅（含 `stage` 与原始片段截断） |
+| chatlog 适配器 | ✅（连本机服务） | ❌ 不提供（需要本机 WeChat 数据服务） |
+| QQ 导出文件上传 | ✅ | ❌ 不提供（单文件版聚焦“粘贴文本”） |
+| 访问口令 | ❌ | ✅（设置 `ACCESS_CODE` 即启用） |
+| 运行依赖 | Python 3.10+ / 4 个包 | 无（Workers 运行时） |
+
+### 11.2 部署步骤（Dashboard 粘贴，无需本地工具链）
+
+1. Cloudflare Dashboard → **Workers & Pages** → **Create** → **Worker**；
+2. 命名（如 `ai-debate-judge`）→ **Deploy**；
+3. 点 **Edit code**，把 `cloudflare/worker.js` 全文粘贴进去 → **Deploy**；
+4. 回到 Worker → **Settings → Variables and Secrets** 添加：
+
+| 名称 | 类型 | 必填 | 说明 |
+|---|---|---|---|
+| `OPENAI_API_KEY` | **Secret** | 是 | 你的 LLM Key；代码中无字面量，也不会回显 |
+| `OPENAI_MODEL` | Variable | 否 | 默认 `gpt-4o-mini` |
+| `OPENAI_BASE_URL` | Variable | 否 | 默认 `https://api.openai.com/v1`（OpenAI 兼容地址） |
+| `ACCESS_CODE` | **Secret** | 否 | 设置后，页面上必须输入同样口令才能评分（**强烈建议公开分享前设置**） |
+| `JSON_MODE` | Variable | 否 | 默认 `1`（请求 `response_format=json_object`）；若服务商不支持该参数，设为 `0` |
+
+5. 打开 `https://<worker名>.<你的子域>.workers.dev` → 点「载入示例（3 轮）」→「开始评判」。
+
+> ⚠️ 默认 URL 是**公开可访问**的，而 Key 是你一个人的。不设 `ACCESS_CODE` 就等于把 Key 额度公开给任何拿到链接的人。
+
+### 11.3 本地自测（不联网、不消耗额度）
+
+```bash
+node cloudflare/selftest.mjs
+# 预期：passed 32 checks / ALL_TESTS_PASSED
+```
+
+覆盖：页面与健康检查、3 轮解析、正常评判（6 次调用、累计 90/75、支持度 54.5、胜方 pro）、非 JSON 触发重写、引用非原文触发重写、0 分缺 `missing_evidence` 触发重写、缺 Key 500、口令 401/200、格式错误 400。
+
+### 11.4 用户额度与限制（以 Cloudflare 控制台为准）
+
+- Workers **免费计划有每日请求数与 CPU 时间上限**（具体数值随 Cloudflare 政策变化，本项目不写死；去控制台 Limits 页确认）；
+- 一次「3 轮评判」= 前端 1 次请求 → Worker 内部 6 次 LLM 调用；Worker 的 CPU 主要消耗在 JSON 校验，等待 LLM 的时间不计入 CPU；
+- Worker 请求体有大小上限（远大于 20,000 字的输入上限，正常使用不会触发）。
+
+**未验证项**：我没有你的 Cloudflare 账号，**没有在真实 Cloudflare 上部署过**；`cloudflare/selftest.mjs` 验证的是逻辑正确性，Dashboard 的按钮文案/字段名可能随版本变化。若部署报错，把控制台错误贴出来即可。
+
+## 12. 已知限制
 
 - **适配器字段未最终确认**：chatlog / QCE 的真实 schema 需在第 7 节本地跑一次后回填候选表；在此之前适配器能保证「报错清晰」，不保证「一次解析成功」。
 - **QCE 流式 JSONL 未支持**：适配器只接受单个 JSON 文件/对象；如导出选了 `STREAMING_JSONL`，请改用普通 JSON。
@@ -208,7 +269,7 @@ Community Cloud 应用默认**公开可访问、无登录**，而 API Key 是你
 - **群聊/多人会话**：超过 2 个发言人会直接报错，需先过滤成双方对话。
 - **平局阈值**为四维加权均值差 ≤ 0.5（0–10 尺度），可在 `config.py` 调整。
 
-## 12. 隐私与安全
+## 13. 隐私与安全
 
 - API Key 只从环境变量读取，代码中无字面量，错误信息不回显 Key。
 - 不写日志文件、不落盘聊天原文；上传文件在内存中解析；结果只存在 Streamlit session。
@@ -216,7 +277,7 @@ Community Cloud 应用默认**公开可访问、无登录**，而 API Key 是你
 - `.streamlit/` 与 `secrets.toml` 已加入 `.gitignore`，密钥不会被提交。
 - `scripts/probe_schema.py` 只打印到 stdout，但输出可能含聊天原文，分享前请自行脱敏。
 
-## 13. 参考与许可证
+## 14. 参考与许可证
 
 | 来源 | 用途 | 许可证 |
 |---|---|---|

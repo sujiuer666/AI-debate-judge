@@ -1,0 +1,19 @@
+# 可选：仅当你用 wrangler CLI 部署时才需要本文件。
+# 用 Cloudflare 后台「粘贴代码」部署的话，完全不需要它。
+#
+# 使用 wrangler：
+#   npm i -g wrangler
+#   wrangler secret put OPENAI_API_KEY
+#   wrangler deploy
+#
+# 注意：wrangler 版本较新时可能提示用 wrangler.jsonc 替代，按提示迁移即可；字段含义相同。
+
+name = "ai-debate-judge"
+main = "worker.js"
+compatibility_date = "2025-06-01"
+
+# 变量（非 secret 的可放这里；OPENAI_API_KEY 必须用 secret 设置）
+# [vars]
+# OPENAI_MODEL = "gpt-4o-mini"
+# OPENAI_BASE_URL = "https://api.openai.com/v1"
+# ACCESS_CODE = "your-access-code"
