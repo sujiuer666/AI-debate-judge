@@ -1,0 +1,15 @@
+# 运行期直接依赖（4 个）。版本下限是「本项目实测/最低可用」的保守值，不是上游推荐值。
+#
+# 依赖来源说明（均为本项目自行引入，不来自被参考仓库的 requirements）：
+#   streamlit  —— MVP 界面框架（需求指定技术栈；ai-debate-arena 也用 Streamlit，但版本不沿用）
+#   pydantic   —— LLM 输出的严格校验（模式参考 LLM-as-Judge / Debatrix 的 Pydantic 用法）
+#   tenacity   —— 瞬时错误指数退避重试（参考 LLM-as-Judge 的 retry 配置）
+#   requests   —— chatlog HTTP 适配器与 OpenAI 兼容接口调用
+#
+# 明确不引入：langchain / nicegui / fastapi / uvicorn / groq / openai SDK / openpyxl
+# （被参考仓库的运行时依赖与 Streamlit MVP 冲突，第 1 步已声明只提取思路）
+
+streamlit>=1.35
+pydantic>=2.6
+tenacity>=8.2
+requests>=2.31

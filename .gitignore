@@ -1,0 +1,13 @@
+# 虚拟环境与缓存
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 本地导出的聊天记录 / 真实数据，绝不入库
+samples/real_*.json
+samples/*.json
+!samples/sample_debate.txt
+
+# 本地环境变量（虽然程序不读 .env，但避免误提交）
+.env

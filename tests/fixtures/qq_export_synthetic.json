@@ -1,0 +1,43 @@
+{
+  "_note": "合成 fixture，非 QQ Chat Exporter 的真实导出 schema。仅用于验证适配器的容错与分段分发逻辑；真实字段名须用 scripts/probe_schema.py 在本地导出文件上确认。",
+  "exportTime": "2026-01-01T10:05:00+08:00",
+  "data": {
+    "sessionName": "示例会话",
+    "messages": [
+      {
+        "type": "text",
+        "sender": { "name": "正方甲", "uin": "10001" },
+        "time": "2026-01-01 10:00:00",
+        "content": [{ "type": "text", "data": { "text": "我方认为应禁止一次性塑料。" } }]
+      },
+      {
+        "type": "reply",
+        "sender": { "name": "反方乙", "uin": "10002" },
+        "time": "2026-01-01 10:00:30",
+        "content": [
+          { "type": "reply", "data": { "title": "引用：我方认为应禁止一次性塑料。" } },
+          { "type": "text", "data": { "text": "对方混淆了禁令与回收。" } },
+          { "type": "image", "data": { "file": "a.jpg" } }
+        ]
+      },
+      {
+        "type": "text",
+        "sender": { "name": "反方乙", "uin": "10002" },
+        "time": "2026-01-01 10:00:40",
+        "content": [{ "type": "text", "data": { "text": "我方主张押金回收体系。" } }]
+      },
+      {
+        "type": "text",
+        "sender": { "name": "正方甲", "uin": "10001" },
+        "time": "2026-01-01 10:01:00",
+        "content": [{ "type": "text", "data": { "text": "第二，替代材料已成熟。" } }]
+      },
+      {
+        "type": "text",
+        "sender": { "name": "反方乙", "uin": "10002" },
+        "time": "2026-01-01 10:01:20",
+        "content": [{ "type": "text", "data": { "text": "替代材料的成本被低估。" } }]
+      }
+    ]
+  }
+}
