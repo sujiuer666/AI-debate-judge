@@ -1,6 +1,0 @@
-{
-  "name": "ai-debate-judge-worker",
-  "private": true,
-  "type": "module",
-  "description": "Cloudflare Worker 单文件版 AI 辩论裁判（仅用于本地自测的 ESM 标记；部署不需要 npm）"
-}

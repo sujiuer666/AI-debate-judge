@@ -16,7 +16,3 @@ samples/*.json
 # 云端部署时 Secrets 在平台后台填写；本地开发可放 .streamlit/secrets.toml
 .streamlit/
 secrets.toml
-
-# Node（Cloudflare Worker 自测 / wrangler CLI）
-node_modules/
-package-lock.json
